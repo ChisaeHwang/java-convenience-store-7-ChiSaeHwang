@@ -10,14 +10,14 @@ public class Product {
     private final String name;
     private final int price;
     private final int quantity;
-    private final Promotion promotion;
+    private final String promotionName;
 
-    private Product(String name, int price, int quantity, Promotion promotion) {
+    private Product(String name, int price, int quantity, String promotionName) {
         validateProduct(name, price, quantity);
         this.name = name;
         this.price = price;
         this.quantity = quantity;
-        this.promotion = promotion;
+        this.promotionName = promotionName;
     }
 
     /**
@@ -26,7 +26,7 @@ public class Product {
      * @param name 상품명
      * @param price 가격
      * @param quantity 수량
-     * @param promotion 프로모션
+     * @param promotionName 프로모션 이름
      * @return 생성된 상품 객체
      * @throws IllegalArgumentException 유효하지 않은 입력값이 있는 경우
      */
@@ -34,22 +34,9 @@ public class Product {
             final String name,
             final int price,
             final int quantity,
-            final Promotion promotion
+            final String promotionName
     ) {
-        return new Product(name, price, quantity, promotion);
-    }
-
-    /**
-     * 프로모션을 적용하여 무료로 제공되는 수량을 계산한다.
-     *
-     * @param quantity 구매 수량
-     * @return 무료 제공 수량
-     */
-    public int calculateFreeQuantity(int quantity) {
-        if (!hasValidPromotion()) {
-            return 0;
-        }
-        return promotion.calculateFreeQuantity(quantity);
+        return new Product(name, price, quantity, promotionName);
     }
 
     /**
@@ -58,7 +45,7 @@ public class Product {
      * @return 프로모션 적용 가능 여부
      */
     public boolean hasValidPromotion() {
-        return promotion != null && promotion.isValid();
+        return promotionName != null && !promotionName.equals("null");
     }
 
 
@@ -73,7 +60,7 @@ public class Product {
         if (!hasEnoughStock(quantity)) {
             throw new IllegalArgumentException("[ERROR] 재고가 부족합니다.");
         }
-        return new Product(this.name, this.price, this.quantity - quantity, this.promotion);
+        return new Product(this.name, this.price, this.quantity - quantity, this.promotionName);
     }
 
     private void validateProduct(String name, int price, int quantity) {
@@ -122,7 +109,7 @@ public class Product {
         return quantity;
     }
 
-    public Promotion getPromotion() {
-        return promotion;
+    public String getPromotionName() {
+        return promotionName;
     }
 }
