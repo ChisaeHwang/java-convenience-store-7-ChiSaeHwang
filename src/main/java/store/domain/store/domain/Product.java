@@ -10,14 +10,14 @@ public class Product {
     private final String name;
     private final int price;
     private final int quantity;
-    private final String promotionName;
+    private final Promotion promotion;
 
-    private Product(String name, int price, int quantity, String promotionName) {
+    private Product(String name, int price, int quantity, Promotion promotion) {
         validateProduct(name, price, quantity);
         this.name = name;
         this.price = price;
         this.quantity = quantity;
-        this.promotionName = promotionName;
+        this.promotion = promotion;
     }
 
     /**
@@ -26,7 +26,7 @@ public class Product {
      * @param name 상품명
      * @param price 가격
      * @param quantity 수량
-     * @param promotionName 프로모션명
+     * @param promotion 프로모션
      * @return 생성된 상품 객체
      * @throws IllegalArgumentException 유효하지 않은 입력값이 있는 경우
      */
@@ -34,9 +34,46 @@ public class Product {
             final String name,
             final int price,
             final int quantity,
-            final String promotionName
+            final Promotion promotion
     ) {
-        return new Product(name, price, quantity, promotionName);
+        return new Product(name, price, quantity, promotion);
+    }
+
+    /**
+     * 프로모션을 적용하여 무료로 제공되는 수량을 계산한다.
+     *
+     * @param quantity 구매 수량
+     * @return 무료 제공 수량
+     */
+    public int calculateFreeQuantity(int quantity) {
+        if (!hasValidPromotion()) {
+            return 0;
+        }
+        return promotion.calculateFreeQuantity(quantity);
+    }
+
+    /**
+     * 프로모션 적용 가능 여부를 확인한다.
+     *
+     * @return 프로모션 적용 가능 여부
+     */
+    public boolean hasValidPromotion() {
+        return promotion != null && promotion.isValid();
+    }
+
+
+    /**
+     * 재고를 차감한 새로운 상품 객체를 반환한다.
+     *
+     * @param quantity 차감할 수량
+     * @return 재고가 차감된 새로운 상품 객체
+     * @throws IllegalArgumentException 재고가 부족한 경우
+     */
+    public Product removeStock(int quantity) {
+        if (!hasEnoughStock(quantity)) {
+            throw new IllegalArgumentException("[ERROR] 재고가 부족합니다.");
+        }
+        return new Product(this.name, this.price, this.quantity - quantity, this.promotion);
     }
 
     private void validateProduct(String name, int price, int quantity) {
@@ -73,29 +110,6 @@ public class Product {
         return this.quantity >= requestedQuantity;
     }
 
-    /**
-     * 프로모션 적용 가능 여부를 확인한다.
-     *
-     * @return 프로모션 적용 가능 여부
-     */
-    public boolean hasPromotion() {
-        return promotionName != null && !promotionName.equals("null");
-    }
-
-    /**
-     * 재고를 차감한 새로운 상품 객체를 반환한다.
-     *
-     * @param quantity 차감할 수량
-     * @return 재고가 차감된 새로운 상품 객체
-     * @throws IllegalArgumentException 재고가 부족한 경우
-     */
-    public Product removeStock(int quantity) {
-        if (!hasEnoughStock(quantity)) {
-            throw new IllegalArgumentException("[ERROR] 재고가 부족합니다.");
-        }
-        return new Product(this.name, this.price, this.quantity - quantity, this.promotionName);
-    }
-
     public String getName() {
         return name;
     }
@@ -104,7 +118,11 @@ public class Product {
         return price;
     }
 
-    public String getPromotionName() {
-        return promotionName;
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public Promotion getPromotion() {
+        return promotion;
     }
 }
