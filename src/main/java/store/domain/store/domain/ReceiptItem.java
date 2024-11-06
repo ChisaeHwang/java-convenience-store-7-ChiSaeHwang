@@ -33,8 +33,7 @@ public final class ReceiptItem {
      */
     public static ReceiptItem createFreeItem(
             final String name,
-            final int quantity,
-            final int unitPrice
+            final int quantity
     ) {
         return new ReceiptItem(name, quantity, 0);  // 증정품은 금액이 0원
     }

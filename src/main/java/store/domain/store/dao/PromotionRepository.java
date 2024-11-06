@@ -52,4 +52,28 @@ public class PromotionRepository {
                 .filter(Promotion::isValid)
                 .toList();
     }
+
+    /**
+     * 프로모션을 저장하거나 업데이트한다.
+     * 동일한 프로모션명이 있다면 교체한다.
+     *
+     * @param promotion 저장할 프로모션
+     * @return 저장된 프로모션
+     */
+    public Promotion save(Promotion promotion) {
+        promotions.removeIf(p -> p.getName().equals(promotion.getName()));
+        promotions.add(promotion);
+        return promotion;
+    }
+
+    /**
+     * 여러 프로모션을 한번에 저장한다.
+     *
+     * @param promotions 저장할 프로모션 목록
+     * @return 저장된 프로모션 목록
+     */
+    public List<Promotion> saveAll(List<Promotion> promotions) {
+        promotions.forEach(this::save);
+        return promotions;
+    }
 }

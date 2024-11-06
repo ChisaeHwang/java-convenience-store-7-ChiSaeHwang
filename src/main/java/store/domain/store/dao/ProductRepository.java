@@ -5,6 +5,7 @@ import store.domain.store.util.ResourceLoader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 
 /**
  * 상품 정보를 저장하고 관리하는 저장소.
@@ -45,14 +46,47 @@ public class ProductRepository {
     }
 
     /**
-     * 상품명으로 첫 번째 상품을 조회한다.
-     *
-     * @param name 상품명
-     * @return 해당 상품명을 가진 첫 번째 상품
+     * 프로모션이 적용된 상품을 조회한다.
      */
-    public Optional<Product> findFirstByName(String name) {
+    public Optional<Product> findPromotionProduct(String name) {
         return products.stream()
                 .filter(product -> product.getName().equals(name))
+                .filter(Product::hasValidPromotion)
                 .findFirst();
+    }
+
+    /**
+     * 프로모션이 적용되지 않은 일반 상품을 조회한다.
+     */
+    public Optional<Product> findNormalProduct(String name) {
+        return products.stream()
+                .filter(product -> product.getName().equals(name))
+                .filter(product -> !product.hasValidPromotion())
+                .findFirst();
+    }
+
+    /**
+     * 상품을 저장하거나 업데이트한다.
+     * 동일한 상품명과 프로모션을 가진 상품이 있다면 교체한다.
+     *
+     * @param product 저장할 상품
+     * @return 저장된 상품
+     */
+    public Product save(Product product) {
+        products.removeIf(p -> p.getName().equals(product.getName()) 
+                && Objects.equals(p.getPromotionName(), product.getPromotionName()));
+        products.add(product);
+        return product;
+    }
+
+    /**
+     * 여러 상품을 한번에 저장한다.
+     *
+     * @param products 저장할 상품 목록
+     * @return 저장된 상품 목록
+     */
+    public List<Product> saveAll(List<Product> products) {
+        products.forEach(this::save);
+        return products;
     }
 }
