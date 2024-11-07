@@ -71,8 +71,8 @@ public class StoreServiceImpl implements StoreService {
             return false;
         }
 
-        return quantity < promotion.getBuyCount() && 
-               promotionProduct.get().hasEnoughStock(promotion.getBuyCount() + promotion.getGetCount());
+        return quantity > (promotion.getBuyCount() + promotion.getGetCount()) && 
+               promotionProduct.get().hasEnoughStock(quantity);
     }
 
     @Override
@@ -81,16 +81,19 @@ public class StoreServiceImpl implements StoreService {
                 .filter(Product::hasValidPromotion);
 
         if (promotionProduct.isEmpty()) {
-            return quantity;
+            return 0;
         }
 
-        int promotionStock = promotionProduct.get().getQuantity();
+        Promotion promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName())
+                .orElse(null);
+        if (promotion == null) {
+            return 0;
+        }
+
+        int promotionSetQuantity = promotion.getBuyCount() + promotion.getGetCount();
+        int normalQuantity = quantity % promotionSetQuantity;
         
-        if (promotionStock < quantity) {
-            return quantity - promotionStock;
-        }
-
-        return 0;
+        return normalQuantity >= promotion.getBuyCount() ? normalQuantity : 0;
     }
 
     private void processRequest(

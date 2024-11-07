@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
+import java.util.LinkedList;
 
 /**
  * 상품 정보를 저장하고 관리하는 저장소.
@@ -15,7 +16,7 @@ public class ProductRepository {
     private final List<Product> products;
 
     private ProductRepository() {
-        this.products = new ArrayList<>();
+        this.products = new LinkedList<>();
         initializeProducts();
     }
 
@@ -82,10 +83,21 @@ public class ProductRepository {
      * @return 저장된 상품
      */
     public Product save(Product product) {
-        products.removeIf(p -> p.getName().equals(product.getName()) 
-                && Objects.equals(p.getPromotionName(), product.getPromotionName()));
-        products.add(product);
+        int index = findProductIndex(product);
+        if (index >= 0) {
+            products.set(index, product);
+        }
         return product;
+    }
+
+    private int findProductIndex(Product product) {
+        for (int i = 0; i < products.size(); i++) {
+            if (products.get(i).getName().equals(product.getName()) &&
+                products.get(i).getPromotionName() == product.getPromotionName()) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**

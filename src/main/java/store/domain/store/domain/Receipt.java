@@ -49,21 +49,36 @@ public final class Receipt {
      */
     private int calculatePromotionDiscountAmount() {
         return freeItems.stream()
-                .mapToInt(item -> item.getQuantity() * item.getUnitPrice())
+                .mapToInt(item -> item.getQuantity() * items.stream()
+                        .filter(purchaseItem -> purchaseItem.getName().equals(item.getName()))
+                        .findFirst()
+                        .map(ReceiptItem::getUnitPrice)
+                        .orElse(0))
                 .sum();
     }
 
     /**
      * 멤버십 할인 금액을 계산한다.
-     * 프로모션 할인 후 금액의 30%, 최대 8,000원
+     * 증정 상품을 제외한 구매 금액의 30%, 최대 8,000원
      */
     private int calculateMembershipDiscountAmount(boolean hasMembership) {
         if (!hasMembership) {
             return 0;
         }
-        int discountableAmount = totalAmount - promotionDiscountAmount;
+
+        // 프로모션이 없는 상품의 금액만 합산
+        int discountableAmount = items.stream()
+                .filter(item -> !hasPromotionItem(item.getName()))
+                .mapToInt(ReceiptItem::getAmount)
+                .sum();
+
         int discountAmount = (int) (discountableAmount * 0.3);
         return Math.min(discountAmount, 8000);
+    }
+
+    private boolean hasPromotionItem(String productName) {
+        return freeItems.stream()
+                .anyMatch(item -> item.getName().equals(productName));
     }
 
     /**
