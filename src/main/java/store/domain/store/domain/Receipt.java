@@ -3,15 +3,20 @@ package store.domain.store.domain;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 구매 영수증을 표현하는 클래스.
  * 구매/증정 상품 내역과 금액 정보를 포함한다.
  */
 public final class Receipt {
+    private static final double MEMBERSHIP_DISCOUNT_RATE = 0.3;
+    private static final int MAX_MEMBERSHIP_DISCOUNT = 8000;
     private final List<ReceiptItem> items;
     private final List<ReceiptItem> freeItems;
     private final Map<String, Promotion> promotionMap;
+    private final int normalPurchaseQuantity;
+    private final int normalPurchaseAmount;
     private final int totalAmount;
     private final int promotionDiscountAmount;
     private final int membershipDiscountAmount;
@@ -21,11 +26,15 @@ public final class Receipt {
             List<ReceiptItem> items,
             List<ReceiptItem> freeItems,
             boolean hasMembership,
-            Map<String, Promotion> promotionMap
+            Map<String, Promotion> promotionMap,
+            int normalPurchaseQuantity,
+            int normalPurchaseAmount
     ) {
         this.items = new ArrayList<>(items);
         this.freeItems = new ArrayList<>(freeItems);
         this.promotionMap = promotionMap;
+        this.normalPurchaseQuantity = normalPurchaseQuantity;
+        this.normalPurchaseAmount = normalPurchaseAmount;
         this.totalAmount = calculateTotalAmount();
         this.promotionDiscountAmount = calculatePromotionDiscountAmount();
         this.membershipDiscountAmount = calculateMembershipDiscountAmount(hasMembership);
@@ -39,9 +48,11 @@ public final class Receipt {
             final List<ReceiptItem> items,
             final List<ReceiptItem> freeItems,
             final boolean hasMembership,
-            final Map<String, Promotion> promotionMap
+            final Map<String, Promotion> promotionMap,
+            final int normalPurchaseQuantity,
+            final int normalPurchaseAmount
     ) {
-        return new Receipt(items, freeItems, hasMembership, promotionMap);
+        return new Receipt(items, freeItems, hasMembership, promotionMap, normalPurchaseQuantity, normalPurchaseAmount);
     }
 
     /**
@@ -85,14 +96,19 @@ public final class Receipt {
             return 0;
         }
 
-        // 프로모션이 적용된 상품은 멤버십 할인에서 제외
+        // 프로모션 미적용 수량이 있을 때는 해당 금액에 대해서만 할인
+        if (normalPurchaseQuantity > 0) {
+            return (int) (normalPurchaseAmount * MEMBERSHIP_DISCOUNT_RATE);
+        }
+
+        // 그 외의 경우 기존 로직 유지
         int discountableAmount = items.stream()
-                .filter(item -> !item.isPromotionItem())  // isPromotionItem으로 체크
+                .filter(item -> !item.isPromotionItem())
                 .mapToInt(ReceiptItem::getAmount)
                 .sum();
 
-        int discountAmount = (int) (discountableAmount * 0.3);
-        return Math.min(discountAmount, 8000);
+        int discountAmount = (int) (discountableAmount * MEMBERSHIP_DISCOUNT_RATE);
+        return Math.min(discountAmount, MAX_MEMBERSHIP_DISCOUNT);
     }
 
     private boolean hasPromotionItem(String productName) {

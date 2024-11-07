@@ -43,9 +43,23 @@ public class StoreServiceImpl implements StoreService {
         ArrayList<ReceiptItem> freeItems = new ArrayList<>();
         Map<String, Promotion> promotionMap = new HashMap<>();
 
+        // 프로모션 적용되지 않는 수량과 금액 계산
+        int normalQuantity = 0;
+        int normalAmount = 0;
+        
+        if (requests.size() == 1) {  // 단일 상품 구매일 때만
+            PurchaseRequest request = requests.get(0);
+            normalQuantity = getNormalPurchaseQuantity(request.getProductName(), request.getQuantity());
+            if (normalQuantity > 0) {
+                Product product = productRepository.findByNameAndQuantityGreaterThanEqual(
+                        request.getProductName(), request.getQuantity())
+                        .orElseThrow(() -> new IllegalArgumentException(ERROR_INSUFFICIENT_STOCK));
+                normalAmount = normalQuantity * product.getPrice();
+            }
+        }
+
         // 각 요청 처리
         for (PurchaseRequest request : requests) {
-            // 프로모션 정보 수집 및 저장
             if (usePromotion) {
                 productRepository.findPromotionProduct(request.getProductName())
                         .filter(Product::hasValidPromotion)
@@ -58,13 +72,20 @@ public class StoreServiceImpl implements StoreService {
             processRequest(request, items, freeItems, usePromotion);
         }
 
-        // 프로모션을 실제로 사용한 상품만 표시 (증정품이 있는 경우)
+        // 프로모션을 실제로 사용한 상품만 표시
         items.stream()
                 .filter(item -> freeItems.stream()
-                        .anyMatch(freeItem -> freeItem.getName().equals(item.getName())))
+                        .anyMatch(free -> free.getName().equals(item.getName())))
                 .forEach(ReceiptItem::markAsPromotionItem);
 
-        return ReceiptResponse.from(Receipt.of(items, freeItems, hasMembership, promotionMap));
+        return ReceiptResponse.from(Receipt.of(
+                items, 
+                freeItems, 
+                hasMembership, 
+                promotionMap, 
+                normalQuantity, 
+                normalAmount  
+        ));
     }
 
     @Override
@@ -87,7 +108,7 @@ public class StoreServiceImpl implements StoreService {
         Optional<Promotion> promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName());
         
         // 프로모션이 없거나 유효하지 않은 경우 false 반환
-        if (promotion.isEmpty() || !promotion.get().isValid()) {  // 여기서 ��간 체크
+        if (promotion.isEmpty() || !promotion.get().isValid()) {  // 여기서 간 체크
             return false;
         }
 
