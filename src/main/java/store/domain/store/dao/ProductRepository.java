@@ -51,23 +51,7 @@ public class ProductRepository {
      * product.md 파일 순서대로 모든 상품을 조회한다.
      */
     public List<Product> findAll() {
-        List<Product> allProducts = new ArrayList<>();
-        
-        for (Product product : products) {
-            allProducts.add(product);
-            
-            if (product.hasValidPromotion()) {
-                Product normalProduct = Product.of(
-                    product.getName(),
-                    product.getPrice(),
-                    0,
-                    null
-                );
-                allProducts.add(normalProduct);
-            }
-        }
-        
-        return allProducts;
+        return new ArrayList<>(products);
     }
 
 

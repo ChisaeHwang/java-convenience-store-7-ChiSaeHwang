@@ -69,17 +69,17 @@ public class StoreConsole {
         CommandWriter.write(PRODUCT_LIST_MESSAGE);
         CommandWriter.write("");
         List<ProductResponse> products = controller.getProducts();
-        
-        for (ProductResponse product : products) {
-            String quantity = product.getQuantity() > 0 ? String.valueOf(product.getQuantity()) + "개" : "재고 없음";
+
+        products.forEach(product -> {
+            String quantity = product.getQuantity() > 0 ? product.getQuantity() + "개" : "재고 없음";
             String promotionMark = product.hasPromotion() ? " " + product.getPromotionName() : "";
-            
-            CommandWriter.writeFormat(PRODUCT_FORMAT, 
+
+            CommandWriter.writeFormat(PRODUCT_FORMAT,
                     product.getName(),
                     product.getPrice(),
                     quantity,
                     promotionMark);
-        }
+        });
     }
 
     private List<PurchaseRequest> inputPurchaseRequests() {
