@@ -17,7 +17,7 @@ import store.domain.store.dto.response.ProductResponse;
 public class StoreConsole {
     private static final String WELCOME_MESSAGE = "안녕하세요. W편의점입니다.";
     private static final String PRODUCT_LIST_MESSAGE = "현재 보유하고 있는 상품입니다.";
-    private static final String PRODUCT_FORMAT = "- %s %,d원 %d개%s";
+    private static final String PRODUCT_FORMAT = "- %s %,d원 %s%s";
     private static final String PURCHASE_INPUT_MESSAGE =
             "\n구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])";
     private static final String PROMOTION_CONFIRM_MESSAGE =
@@ -71,11 +71,13 @@ public class StoreConsole {
         List<ProductResponse> products = controller.getProducts();
         
         for (ProductResponse product : products) {
+            String quantity = product.getQuantity() > 0 ? String.valueOf(product.getQuantity()) + "개" : "재고 없음";
             String promotionMark = product.hasPromotion() ? " " + product.getPromotionName() : "";
+            
             CommandWriter.writeFormat(PRODUCT_FORMAT, 
                     product.getName(),
                     product.getPrice(),
-                    product.getQuantity(),
+                    quantity,
                     promotionMark);
         }
     }

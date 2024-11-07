@@ -17,7 +17,7 @@ import store.domain.store.dto.response.ReceiptResponse;
 
 public class StoreServiceImpl implements StoreService {
     private static final String ERROR_INVALID_PROMOTION = "[ERROR] 유효하지 않은 프로모션입니다.";
-    private static final String ERROR_INSUFFICIENT_STOCK = "[ERROR] 재고가 부족합니다.";
+    private static final String ERROR_INSUFFICIENT_STOCK = "[ERROR] 재고 수량을 초과하여 구매할 수 없습니다. 다시 입력해 주세요.";
     private static final String ERROR_NO_ITEMS = "[ERROR] 구매 상품이 없습니다.";
 
     private static final StoreServiceImpl instance = new StoreServiceImpl();
@@ -120,7 +120,7 @@ public class StoreServiceImpl implements StoreService {
         }
 
         int promotionStock = promotionProduct.get().getQuantity();
-        
+
         // 가능한 세트 수 계산
         int possibleSets = promotionStock / (promotion.getBuyCount() + promotion.getGetCount());
 
