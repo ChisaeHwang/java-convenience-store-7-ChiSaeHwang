@@ -84,22 +84,22 @@ public class StoreServiceImpl implements StoreService {
             return false;
         }
 
-        Promotion promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName())
-                .orElse(null);
-        if (promotion == null) {
+        Optional<Promotion> promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName());
+        
+        // 프로모션이 없거나 유효하지 않은 경우 false 반환
+        if (promotion.isEmpty() || !promotion.get().isValid()) {  // 여기서 ��간 체크
             return false;
         }
 
         // 구매 수량이 프로모션 구매 수량의 배수인지 확인
-        if (quantity % promotion.getBuyCount() != 0) {
+        if (quantity % promotion.get().getBuyCount() != 0) {
             return false;
         }
 
         // 증정품을 포함한 전체 필요 수량 계산
-        int sets = quantity / promotion.getBuyCount();
-        int totalQuantityNeeded = quantity + (sets * promotion.getGetCount());
+        int sets = quantity / promotion.get().getBuyCount();
+        int totalQuantityNeeded = quantity + (sets * promotion.get().getGetCount());
         
-        // 프로모션 재고가 전체 필요 수량보다 많은지 확인
         int promotionStock = promotionProduct.get().getQuantity();
         return promotionStock >= totalQuantityNeeded;
     }
@@ -138,6 +138,7 @@ public class StoreServiceImpl implements StoreService {
         return productRepository.findPromotionProduct(productName)
                 .filter(Product::hasValidPromotion)
                 .flatMap(product -> promotionRepository.findByName(product.getPromotionName()))
+                .filter(Promotion::isValid)  // 여기서 기간 체크
                 .map(Promotion::getGetCount)
                 .orElse(0);
     }
@@ -207,6 +208,12 @@ public class StoreServiceImpl implements StoreService {
             List<ReceiptItem> items,
             List<ReceiptItem> freeItems
     ) {
+        // 프로모션이 유효하지 않으면 일반 구매로 처리
+        if (!promotion.isValid()) {
+            processNormalPurchase(request, items);
+            return;
+        }
+
         int quantity = Math.min(request.getQuantity(), promotionProduct.getQuantity());
 
         // 입력한 수량 그대로 items에 추가
@@ -220,7 +227,7 @@ public class StoreServiceImpl implements StoreService {
         int fullSetCount = quantity / (promotion.getBuyCount() + promotion.getGetCount());
         int freeQuantity = fullSetCount * promotion.getGetCount();
 
-        // 증정 상품 추가
+        // 증정 상품 추가 (프로모션이 유효한 경우에만)
         if (freeQuantity > 0) {
             freeItems.add(ReceiptItem.createFreeItem(
                     request.getProductName(),
