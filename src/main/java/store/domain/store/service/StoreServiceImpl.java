@@ -1,6 +1,7 @@
 package store.domain.store.service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import store.domain.store.dao.ProductRepository;
@@ -10,6 +11,7 @@ import store.domain.store.domain.Promotion;
 import store.domain.store.domain.Receipt;
 import store.domain.store.domain.ReceiptItem;
 import store.domain.store.dto.request.PurchaseRequest;
+import store.domain.store.dto.response.ProductResponse;
 import store.domain.store.dto.response.ReceiptResponse;
 
 public class StoreServiceImpl implements StoreService {
@@ -44,6 +46,14 @@ public class StoreServiceImpl implements StoreService {
         }
 
         return ReceiptResponse.from(Receipt.of(items, freeItems, hasMembership));
+    }
+
+    @Override
+    public List<ProductResponse> getProducts() {
+        return productRepository.findAll()
+                .stream()
+                .map(ProductResponse::from)
+                .toList();
     }
 
     @Override

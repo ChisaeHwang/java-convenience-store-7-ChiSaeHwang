@@ -2,6 +2,7 @@ package store.domain.store.presentation;
 
 import java.util.List;
 import store.domain.store.dto.request.PurchaseRequest;
+import store.domain.store.dto.response.ProductResponse;
 import store.domain.store.dto.response.ReceiptResponse;
 import store.domain.store.service.StoreService;
 
@@ -22,6 +23,10 @@ public class StoreController {
 
     public ReceiptResponse purchase(List<PurchaseRequest> requests, boolean usePromotion, boolean hasMembership) {
         return storeService.purchase(requests, usePromotion, hasMembership);
+    }
+
+    public List<ProductResponse> getProducts() {
+        return storeService.getProducts();
     }
 
     public boolean canAddPromotionPurchase(String productName, int quantity) {

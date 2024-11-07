@@ -1,17 +1,21 @@
 package store.domain.console;
 
-import camp.nextstep.edu.missionutils.Console;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import store.domain.console.util.CommandReader;
+import store.domain.console.util.CommandWriter;
 import store.domain.store.dto.request.PurchaseRequest;
 import store.domain.store.dto.response.PurchaseResponse;
 import store.domain.store.dto.response.ReceiptResponse;
 import store.domain.store.presentation.StoreController;
 import store.domain.store.service.StoreService;
+import store.domain.store.dto.response.ProductResponse;
 
 public class StoreConsole {
     private static final String WELCOME_MESSAGE = "안녕하세요. W편의점입니다.";
+    private static final String PRODUCT_LIST_MESSAGE = "현재 보유하고 있는 상품입니다.\n";
+    private static final String PRODUCT_FORMAT = "- %s %,d원 %d개%s";
     private static final String PURCHASE_INPUT_MESSAGE =
             "\n구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])";
     private static final String PROMOTION_CONFIRM_MESSAGE =
@@ -27,12 +31,13 @@ public class StoreConsole {
         try {
             processPurchase();
         } catch (IllegalArgumentException e) {
-            System.out.println(e.getMessage());
+            CommandWriter.write(e.getMessage());
         }
     }
 
     private void processPurchase() {
-        System.out.println(WELCOME_MESSAGE);
+        CommandWriter.write(WELCOME_MESSAGE);
+        printProductList();
 
         List<PurchaseRequest> requests = inputPurchaseRequests();
         boolean usePromotion = confirmPromotionUse(requests);
@@ -42,11 +47,25 @@ public class StoreConsole {
         printReceipt(receipt);
     }
 
-    private List<PurchaseRequest> inputPurchaseRequests() {
-        System.out.println(PURCHASE_INPUT_MESSAGE);
-        String input = Console.readLine();
+    private void printProductList() {
+        CommandWriter.write(PRODUCT_LIST_MESSAGE);
+        List<ProductResponse> products = controller.getProducts();
+        
+        for (ProductResponse product : products) {
+            String promotionMark = product.hasPromotion() ? " " + product.getPromotionName() : "";
+            CommandWriter.writeFormat(PRODUCT_FORMAT, 
+                    product.getName(),
+                    product.getPrice(),
+                    product.getQuantity(),
+                    promotionMark);
+        }
+        CommandWriter.write("");
+    }
 
-        // 입력 형식: [상품명-수량]
+    private List<PurchaseRequest> inputPurchaseRequests() {
+        CommandWriter.write(PURCHASE_INPUT_MESSAGE);
+        String input = CommandReader.read();
+
         String pattern = "\\[([^-]+-\\d+)\\](,\\[([^-]+-\\d+)\\])*";
         if (!input.matches(pattern)) {
             throw new IllegalArgumentException(ERROR_INVALID_INPUT);
@@ -66,7 +85,7 @@ public class StoreConsole {
     private boolean confirmPromotionUse(List<PurchaseRequest> requests) {
         for (PurchaseRequest request : requests) {
             if (controller.canAddPromotionPurchase(request.getProductName(), request.getQuantity())) {
-                System.out.printf(PROMOTION_CONFIRM_MESSAGE,
+                CommandWriter.writeFormat(PROMOTION_CONFIRM_MESSAGE,
                         request.getProductName(), request.getQuantity());
                 return readYesNo();
             }
@@ -74,7 +93,7 @@ public class StoreConsole {
             int normalQuantity = controller.getNormalPurchaseQuantity(
                     request.getProductName(), request.getQuantity());
             if (normalQuantity > 0) {
-                System.out.printf(NORMAL_PURCHASE_CONFIRM_MESSAGE,
+                CommandWriter.writeFormat(NORMAL_PURCHASE_CONFIRM_MESSAGE,
                         request.getProductName(), normalQuantity);
                 return readYesNo();
             }
@@ -83,12 +102,12 @@ public class StoreConsole {
     }
 
     private boolean confirmMembership() {
-        System.out.println(MEMBERSHIP_CONFIRM_MESSAGE);
+        CommandWriter.write(MEMBERSHIP_CONFIRM_MESSAGE);
         return readYesNo();
     }
 
     private boolean readYesNo() {
-        String input = Console.readLine().toUpperCase();
+        String input = CommandReader.read().toUpperCase();
         if (!input.matches("[YN]")) {
             throw new IllegalArgumentException(ERROR_INVALID_INPUT);
         }
@@ -96,39 +115,39 @@ public class StoreConsole {
     }
 
     private void printReceipt(ReceiptResponse receipt) {
-        System.out.println("\n영수증");
-        System.out.println("=".repeat(40));
+        CommandWriter.write("\n영수증");
+        CommandWriter.write("=".repeat(40));
 
-        System.out.println("구매 상품");
+        CommandWriter.write("구매 상품");
         receipt.getItems().forEach(this::printPurchaseItem);
 
         if (!receipt.getFreeItems().isEmpty()) {
-            System.out.println("\n증정 상품");
+            CommandWriter.write("\n증정 상품");
             receipt.getFreeItems().forEach(this::printFreeItem);
         }
 
-        System.out.println("\n금액 정보");
+        CommandWriter.write("\n금액 정보");
         printAmountInfo(receipt);
-        System.out.println("=".repeat(40));
+        CommandWriter.write("=".repeat(40));
     }
 
     private void printPurchaseItem(PurchaseResponse item) {
-        System.out.printf("%s - %d개 : %,d원%n",
+        CommandWriter.writeFormat("%s - %d개 : %,d원",
                 item.getName(), item.getQuantity(), item.getAmount());
     }
 
     private void printFreeItem(PurchaseResponse item) {
-        System.out.printf("%s - %d개%n", item.getName(), item.getQuantity());
+        CommandWriter.writeFormat("%s - %d개", item.getName(), item.getQuantity());
     }
 
     private void printAmountInfo(ReceiptResponse receipt) {
-        System.out.printf("총 구매액: %,d원%n", receipt.getTotalAmount());
+        CommandWriter.writeFormat("총 구매액: %,d원", receipt.getTotalAmount());
         if (receipt.getPromotionDiscountAmount() > 0) {
-            System.out.printf("행사 할인: -%,d원%n", receipt.getPromotionDiscountAmount());
+            CommandWriter.writeFormat("행사 할인: -%,d원", receipt.getPromotionDiscountAmount());
         }
         if (receipt.getMembershipDiscountAmount() > 0) {
-            System.out.printf("멤버십 할인: -%,d원%n", receipt.getMembershipDiscountAmount());
+            CommandWriter.writeFormat("멤버십 할인: -%,d원", receipt.getMembershipDiscountAmount());
         }
-        System.out.printf("최종 결제 금액: %,d원%n", receipt.getFinalAmount());
+        CommandWriter.writeFormat("최종 결제 금액: %,d원", receipt.getFinalAmount());
     }
 }

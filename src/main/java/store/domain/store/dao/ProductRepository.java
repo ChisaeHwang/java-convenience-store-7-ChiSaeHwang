@@ -45,6 +45,15 @@ public class ProductRepository {
                 .findFirst();
     }
 
+
+    /**
+     * product.md 파일 순서대로 모든 상품을 조회한다.
+     */
+    public List<Product> findAll() {
+        return new ArrayList<>(products);
+    }
+
+
     /**
      * 프로모션이 적용된 상품을 조회한다.
      */
