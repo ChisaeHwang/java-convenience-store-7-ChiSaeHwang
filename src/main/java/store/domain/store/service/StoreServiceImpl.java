@@ -174,33 +174,32 @@ public class StoreServiceImpl implements StoreService {
             List<ReceiptItem> freeItems
     ) {
         int promotionStock = promotionProduct.getQuantity();
-        int quantity = request.getQuantity();
+        
+        if (promotionStock >= request.getQuantity()) {
+            processPromotionPurchase(request, promotionProduct, promotion, items, freeItems);
+            return;
+        }
 
-        // 프로모션 재고로 처리 가능한 수량 계산
-        int maxPromotionQuantity = (promotionStock / (promotion.getBuyCount() + promotion.getGetCount())) 
-                                 * (promotion.getBuyCount() + promotion.getGetCount());
-        int promotionQuantity = Math.min(quantity, maxPromotionQuantity);
-
-        if (promotionQuantity > 0) {
+        // 프로모션 재고로 처리 가능한 만큼 처리
+        if (promotionStock > 0) {
             processPromotionPurchase(
-                    PurchaseRequest.of(request.getProductName(), promotionQuantity),
-                    promotionProduct,
-                    promotion,
-                    items,
-                    freeItems
+                PurchaseRequest.of(request.getProductName(), promotionStock),
+                promotionProduct,
+                promotion,
+                items,
+                freeItems
             );
         }
 
         // 남은 수량은 일반 재고로 처리
-        int remainingQuantity = quantity - promotionQuantity;
-        if (remainingQuantity > 0) {
+        int normalQuantity = request.getQuantity() - promotionStock;
+        if (normalQuantity > 0) {
             processNormalPurchase(
-                    PurchaseRequest.of(request.getProductName(), remainingQuantity),
-                    items
+                PurchaseRequest.of(request.getProductName(), normalQuantity),
+                items
             );
         }
     }
-
     private void processPromotionPurchase(
             PurchaseRequest request,
             Product promotionProduct,
