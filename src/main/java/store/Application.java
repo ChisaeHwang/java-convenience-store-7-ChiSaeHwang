@@ -1,7 +1,9 @@
 package store;
 
+import store.domain.console.StoreConsole;
+
 public class Application {
     public static void main(String[] args) {
-        // TODO: 프로그램 구현
+        new StoreConsole().run();
     }
 }

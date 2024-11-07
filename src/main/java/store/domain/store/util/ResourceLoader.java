@@ -15,8 +15,8 @@ import java.util.List;
  * 리소스 파일에서 데이터를 읽어오는 유틸리티 클래스.
  */
 public final class ResourceLoader {
-  private static final String PRODUCTS_FILE = "products.csv";
-  private static final String PROMOTIONS_FILE = "promotions.csv";
+  private static final String PRODUCTS_FILE = "products.md";
+  private static final String PROMOTIONS_FILE = "promotions.md";
   private static final String DELIMITER = ",";
   
   // Products 관련 상수
@@ -38,7 +38,7 @@ public final class ResourceLoader {
   }
 
   /**
-   * products.csv 파일에서 상품 정보를 읽어 Product 객체 리스트로 반환한다.
+   * products.md 파일에서 상품 정보를 읽어 Product 객체 리스트로 반환한다.
    *
    * @return 상품 목록
    * @throws IllegalStateException 파일을 찾을 수 없거나 읽기에 실패한 경우
@@ -70,7 +70,7 @@ public final class ResourceLoader {
   }
 
   /**
-   * promotions.csv 파일에서 프로모션 정보를 읽어 Promotion 객체 리스트로 반환한다.
+   * promotions.md 파일에서 프로모션 정보를 읽어 Promotion 객체 리스트로 반환한다.
    *
    * @return 프로모션 목록
    * @throws IllegalStateException 파일을 찾을 수 없거나 읽기에 실패한 경우
