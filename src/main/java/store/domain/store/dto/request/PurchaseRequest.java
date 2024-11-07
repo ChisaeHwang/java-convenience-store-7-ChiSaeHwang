@@ -5,7 +5,7 @@ package store.domain.store.dto.request;
  */
 public class PurchaseRequest {
     private final String productName;
-    private final int quantity;
+    private int quantity;
 
     private PurchaseRequest(String productName, int quantity) {
         this.productName = productName;
@@ -25,5 +25,9 @@ public class PurchaseRequest {
 
     public int getQuantity() {
         return quantity;
+    }
+
+    public void addPromotionQuantity(int additionalQuantity) {
+        this.quantity += additionalQuantity;
     }
 }

@@ -9,6 +9,7 @@ public final class ReceiptItem {
     private final int quantity;
     private final int unitPrice;
     private final int amount;
+    private boolean isPromotionItem;
 
     private ReceiptItem(String name, int quantity, int unitPrice) {
         this.name = name;
@@ -52,5 +53,13 @@ public final class ReceiptItem {
 
     public int getAmount() {
         return amount;
+    }
+
+    public void markAsPromotionItem() {
+        this.isPromotionItem = true;
+    }
+
+    public boolean isPromotionItem() {
+        return isPromotionItem;
     }
 }

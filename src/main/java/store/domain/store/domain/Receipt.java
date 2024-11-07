@@ -48,6 +48,7 @@ public final class Receipt {
      * 프로모션 할인 금액(증정 상품의 가치)을 계산한다.
      */
     private int calculatePromotionDiscountAmount() {
+        // 증정 상품 가치만큼 할인
         return freeItems.stream()
                 .mapToInt(item -> item.getQuantity() * items.stream()
                         .filter(purchaseItem -> purchaseItem.getName().equals(item.getName()))
@@ -66,9 +67,9 @@ public final class Receipt {
             return 0;
         }
 
-        // 프로모션이 없는 상품의 금액만 합산
+        // 프로모션이 적용된 상품을 제외한 금액만 할인
         int discountableAmount = items.stream()
-                .filter(item -> !hasPromotionItem(item.getName()))
+                .filter(item -> !item.isPromotionItem())
                 .mapToInt(ReceiptItem::getAmount)
                 .sum();
 

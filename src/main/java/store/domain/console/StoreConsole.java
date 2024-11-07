@@ -1,6 +1,8 @@
 package store.domain.console;
 
+import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 import store.domain.console.util.CommandReader;
@@ -104,7 +106,12 @@ public class StoreConsole {
             if (controller.canAddPromotionPurchase(request.getProductName(), request.getQuantity())) {
                 CommandWriter.writeFormat(PROMOTION_CONFIRM_MESSAGE,
                         request.getProductName(), request.getQuantity());
-                return readYesNo();
+                boolean usePromotion = readYesNo();
+                if (usePromotion) {
+                    // 프로모션 수락 시 증정품 추가
+                    request.addPromotionQuantity(request.getQuantity());
+                }
+                return usePromotion;
             }
 
             int normalQuantity = controller.getNormalPurchaseQuantity(
@@ -135,7 +142,23 @@ public class StoreConsole {
         CommandWriter.write(RECEIPT_HEADER);
         CommandWriter.write(RECEIPT_ITEMS_HEADER);
         
-        receipt.getItems().forEach(item -> printPurchaseItem(item, receipt));
+        receipt.getItems().stream()
+               .collect(Collectors.groupingBy(
+                   PurchaseResponse::getName,
+                   LinkedHashMap::new,  // 순서 유지를 위해 LinkedHashMap 사용
+                   Collectors.collectingAndThen(
+                       Collectors.toList(),
+                       items -> {
+                           int totalQuantity = items.stream().mapToInt(PurchaseResponse::getQuantity).sum();
+                           int totalAmount = items.stream().mapToInt(PurchaseResponse::getAmount).sum();
+                           return new AbstractMap.SimpleEntry<>(totalQuantity, totalAmount);
+                       }
+                   )
+               ))
+               .forEach((name, entry) -> 
+                   CommandWriter.writeFormat(RECEIPT_ITEM_FORMAT,
+                       name, entry.getKey(), entry.getValue())
+               );
 
         if (!receipt.getFreeItems().isEmpty()) {
             CommandWriter.write(RECEIPT_FREE_HEADER);
@@ -146,50 +169,25 @@ public class StoreConsole {
         printAmountInfo(receipt);
     }
 
-    private void printPurchaseItem(PurchaseResponse item, ReceiptResponse receipt) {
-        int totalQuantity = item.getQuantity() + 
-            receipt.getFreeItems().stream()
-                   .filter(freeItem -> freeItem.getName().equals(item.getName()))
-                   .mapToInt(PurchaseResponse::getQuantity)
-                   .sum();
-
-        int totalAmount = (item.getAmount() / item.getQuantity()) * totalQuantity;
-
-        CommandWriter.writeFormat(RECEIPT_ITEM_FORMAT,
-                item.getName(), totalQuantity, totalAmount);
-    }
-
     private void printFreeItem(PurchaseResponse item) {
         CommandWriter.writeFormat(RECEIPT_FREE_FORMAT,
                 item.getName(), item.getQuantity());
     }
 
     private void printAmountInfo(ReceiptResponse receipt) {
-        int totalQuantity = receipt.getItems().stream().mapToInt(PurchaseResponse::getQuantity).sum() +
-                          receipt.getFreeItems().stream().mapToInt(PurchaseResponse::getQuantity).sum();
-        
-        int totalAmount = receipt.getItems().stream()
-                .mapToInt(item -> {
-                    int itemTotalQuantity = item.getQuantity() + 
-                        receipt.getFreeItems().stream()
-                               .filter(freeItem -> freeItem.getName().equals(item.getName()))
-                               .mapToInt(PurchaseResponse::getQuantity)
-                               .sum();
-                    return (item.getAmount() / item.getQuantity()) * itemTotalQuantity;
-                })
+        // 구매 수량만 합산 (증정품은 제외)
+        int totalQuantity = receipt.getItems().stream()
+                .mapToInt(PurchaseResponse::getQuantity)
                 .sum();
         
         CommandWriter.writeFormat(RECEIPT_TOTAL_FORMAT, 
-                totalQuantity, totalAmount);
+                totalQuantity, receipt.getTotalAmount());
         
-        if (receipt.getPromotionDiscountAmount() > 0) {
-            CommandWriter.writeFormat(RECEIPT_DISCOUNT_FORMAT, 
-                    "행사할인", receipt.getPromotionDiscountAmount());
-        }
-        if (receipt.getMembershipDiscountAmount() > 0) {
-            CommandWriter.writeFormat(RECEIPT_DISCOUNT_FORMAT, 
-                    "멤버십할인", receipt.getMembershipDiscountAmount());
-        }
+        CommandWriter.writeFormat(RECEIPT_DISCOUNT_FORMAT, 
+                "행사할인", receipt.getPromotionDiscountAmount());
+        CommandWriter.writeFormat(RECEIPT_DISCOUNT_FORMAT, 
+                "멤버십할인", receipt.getMembershipDiscountAmount());
+        
         CommandWriter.writeFormat(RECEIPT_FINAL_FORMAT, receipt.getFinalAmount());
     }
 }
