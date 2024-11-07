@@ -104,25 +104,18 @@ public class StoreConsole {
     private boolean confirmPromotionUse(List<PurchaseRequest> requests) {
         for (PurchaseRequest request : requests) {
             if (controller.canAddPromotionPurchase(request.getProductName(), request.getQuantity())) {
+                int freeCount = controller.getPromotionFreeCount(request.getProductName());
+                
                 CommandWriter.writeFormat(PROMOTION_CONFIRM_MESSAGE,
-                        request.getProductName(), request.getQuantity());
+                        request.getProductName(), freeCount);
                 boolean usePromotion = readYesNo();
                 if (usePromotion) {
-                    // 프로모션 수락 시 증정품 추가
-                    request.addPromotionQuantity(request.getQuantity());
+                    request.addPromotionQuantity(freeCount);
                 }
                 return usePromotion;
             }
-
-            int normalQuantity = controller.getNormalPurchaseQuantity(
-                    request.getProductName(), request.getQuantity());
-            if (normalQuantity > 0) {
-                CommandWriter.writeFormat(NORMAL_PURCHASE_CONFIRM_MESSAGE,
-                        request.getProductName(), normalQuantity);
-                return readYesNo();
-            }
         }
-        return true;
+        return false;
     }
 
     private boolean confirmMembership() {

@@ -1,8 +1,9 @@
 package store.domain.store.service;
 
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import store.domain.store.dao.ProductRepository;
 import store.domain.store.dao.PromotionRepository;
@@ -40,20 +41,30 @@ public class StoreServiceImpl implements StoreService {
 
         ArrayList<ReceiptItem> items = new ArrayList<>();
         ArrayList<ReceiptItem> freeItems = new ArrayList<>();
+        Map<String, Promotion> promotionMap = new HashMap<>();
 
         // 각 요청 처리
         for (PurchaseRequest request : requests) {
+            // 프로모션 정보 수집 및 저장
+            if (usePromotion) {
+                productRepository.findPromotionProduct(request.getProductName())
+                        .filter(Product::hasValidPromotion)
+                        .ifPresent(product -> {
+                            promotionRepository.findByName(product.getPromotionName())
+                                    .ifPresent(promotion -> promotionMap.put(request.getProductName(), promotion));
+                        });
+            }
+            
             processRequest(request, items, freeItems, usePromotion);
         }
 
-        // 프로모션 적용된 상품의 수량을 ReceiptItem에 표시
-        items.forEach(item -> {
-            if (hasValidPromotion(item.getName())) {
-                item.markAsPromotionItem();
-            }
-        });
+        // 프로모션을 실제로 사용한 상품만 표시 (증정품이 있는 경우)
+        items.stream()
+                .filter(item -> freeItems.stream()
+                        .anyMatch(freeItem -> freeItem.getName().equals(item.getName())))
+                .forEach(ReceiptItem::markAsPromotionItem);
 
-        return ReceiptResponse.from(Receipt.of(items, freeItems, hasMembership));
+        return ReceiptResponse.from(Receipt.of(items, freeItems, hasMembership, promotionMap));
     }
 
     @Override
@@ -68,7 +79,7 @@ public class StoreServiceImpl implements StoreService {
     public boolean canAddPromotionPurchase(String productName, int quantity) {
         Optional<Product> promotionProduct = productRepository.findPromotionProduct(productName)
                 .filter(Product::hasValidPromotion);
-        
+
         if (promotionProduct.isEmpty()) {
             return false;
         }
@@ -79,8 +90,18 @@ public class StoreServiceImpl implements StoreService {
             return false;
         }
 
-        // 구매 수량이 프로모션 구매 수량과 정확히 일치할 때만 추가 구매 메시지 표시
-        return quantity == promotion.getBuyCount();
+        // 구매 수량이 프로모션 구매 수량의 배수인지 확인
+        if (quantity % promotion.getBuyCount() != 0) {
+            return false;
+        }
+
+        // 증정품을 포함한 전체 필요 수량 계산
+        int sets = quantity / promotion.getBuyCount();
+        int totalQuantityNeeded = quantity + (sets * promotion.getGetCount());
+        
+        // 프로모션 재고가 전체 필요 수량보다 많은지 확인
+        int promotionStock = promotionProduct.get().getQuantity();
+        return promotionStock >= totalQuantityNeeded;
     }
 
     @Override
@@ -101,8 +122,17 @@ public class StoreServiceImpl implements StoreService {
         int promotionStock = promotionProduct.get().getQuantity();
         int possibleSets = promotionStock / (promotion.getBuyCount() + promotion.getGetCount());
         int maxPromotionQuantity = possibleSets * (promotion.getBuyCount() + promotion.getGetCount());
-        
+
         return quantity > maxPromotionQuantity ? quantity - maxPromotionQuantity : 0;
+    }
+
+    @Override
+    public int getPromotionFreeCount(String productName) {
+        return productRepository.findPromotionProduct(productName)
+                .filter(Product::hasValidPromotion)
+                .flatMap(product -> promotionRepository.findByName(product.getPromotionName()))
+                .map(Promotion::getGetCount)
+                .orElse(0);
     }
 
     private void processRequest(
@@ -111,18 +141,21 @@ public class StoreServiceImpl implements StoreService {
             List<ReceiptItem> freeItems,
             boolean usePromotion
     ) {
+        // 항상 프로모션 재고 먼저 확인
         Optional<Product> promotionProduct = productRepository.findPromotionProduct(request.getProductName())
                 .filter(Product::hasValidPromotion);
 
-        if (!usePromotion || promotionProduct.isEmpty()) {
-            processNormalPurchase(request, items);
+        if (promotionProduct.isPresent()) {
+            Promotion promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName())
+                    .orElseThrow(() -> new IllegalArgumentException(ERROR_INVALID_PROMOTION));
+
+            // usePromotion이 false여도 프로모션 재고 먼저 소진
+            handlePromotionPurchase(request, promotionProduct.get(), promotion, items, freeItems);
             return;
         }
 
-        Promotion promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName())
-                .orElseThrow(() -> new IllegalArgumentException(ERROR_INVALID_PROMOTION));
-
-        handlePromotionPurchase(request, promotionProduct.get(), promotion, items, freeItems);
+        // 프로모션 재고가 없을 때만 일반 재고 사용
+        processNormalPurchase(request, items);
     }
 
     private void handlePromotionPurchase(
@@ -133,29 +166,29 @@ public class StoreServiceImpl implements StoreService {
             List<ReceiptItem> freeItems
     ) {
         int promotionStock = promotionProduct.getQuantity();
-        
-        if (promotionStock >= request.getQuantity()) {
-            processPromotionPurchase(request, promotionProduct, promotion, items, freeItems);
-            return;
-        }
+        int quantity = request.getQuantity();
 
-        // 프로모션 재고로 처리 가능한 만큼 처리
-        if (promotionStock > 0) {
+        // 프로모션 재고로 처리 가능한 수량 계산
+        int maxPromotionQuantity = (promotionStock / (promotion.getBuyCount() + promotion.getGetCount())) 
+                                 * (promotion.getBuyCount() + promotion.getGetCount());
+        int promotionQuantity = Math.min(quantity, maxPromotionQuantity);
+
+        if (promotionQuantity > 0) {
             processPromotionPurchase(
-                PurchaseRequest.of(request.getProductName(), promotionStock),
-                promotionProduct,
-                promotion,
-                items,
-                freeItems
+                    PurchaseRequest.of(request.getProductName(), promotionQuantity),
+                    promotionProduct,
+                    promotion,
+                    items,
+                    freeItems
             );
         }
 
         // 남은 수량은 일반 재고로 처리
-        int normalQuantity = request.getQuantity() - promotionStock;
-        if (normalQuantity > 0) {
+        int remainingQuantity = quantity - promotionQuantity;
+        if (remainingQuantity > 0) {
             processNormalPurchase(
-                PurchaseRequest.of(request.getProductName(), normalQuantity),
-                items
+                    PurchaseRequest.of(request.getProductName(), remainingQuantity),
+                    items
             );
         }
     }
@@ -168,7 +201,7 @@ public class StoreServiceImpl implements StoreService {
             List<ReceiptItem> freeItems
     ) {
         int quantity = Math.min(request.getQuantity(), promotionProduct.getQuantity());
-        
+
         // 입력한 수량 그대로 items에 추가
         items.add(ReceiptItem.of(
                 request.getProductName(),

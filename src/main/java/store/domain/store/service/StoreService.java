@@ -29,4 +29,9 @@ public interface StoreService {
      * 정가 구매가 필요한 수량을 반환
      */
     int getNormalPurchaseQuantity(String productName, int quantity);
+
+    /**
+     * 프로모션의 증정 수량을 반환
+     */
+    int getPromotionFreeCount(String productName);
 }

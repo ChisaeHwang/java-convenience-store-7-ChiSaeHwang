@@ -36,4 +36,8 @@ public class StoreController {
     public int getNormalPurchaseQuantity(String productName, int quantity) {
         return storeService.getNormalPurchaseQuantity(productName, quantity);
     }
+
+    public int getPromotionFreeCount(String productName) {
+        return storeService.getPromotionFreeCount(productName);
+    }
 }
