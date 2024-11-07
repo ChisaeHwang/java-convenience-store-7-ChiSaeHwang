@@ -103,6 +103,17 @@ public class StoreConsole {
 
     private boolean confirmPromotionUse(List<PurchaseRequest> requests) {
         for (PurchaseRequest request : requests) {
+            // 먼저 프로모션 적용되지 않는 수량이 있는지 체크
+            int normalQuantity = controller.getNormalPurchaseQuantity(request.getProductName(), request.getQuantity());
+            if (normalQuantity > 0) {
+                CommandWriter.writeFormat(NORMAL_PURCHASE_CONFIRM_MESSAGE,
+                        request.getProductName(), normalQuantity);
+                if (!readYesNo()) {
+                    return false;
+                }
+            }
+
+            // 그 다음 프로모션 적용 확인
             if (controller.canAddPromotionPurchase(request.getProductName(), request.getQuantity())) {
                 int freeCount = controller.getPromotionFreeCount(request.getProductName());
                 

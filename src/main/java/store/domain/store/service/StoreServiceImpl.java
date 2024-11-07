@@ -120,10 +120,17 @@ public class StoreServiceImpl implements StoreService {
         }
 
         int promotionStock = promotionProduct.get().getQuantity();
+        
+        // 가능한 세트 수 계산
         int possibleSets = promotionStock / (promotion.getBuyCount() + promotion.getGetCount());
-        int maxPromotionQuantity = possibleSets * (promotion.getBuyCount() + promotion.getGetCount());
 
-        return quantity > maxPromotionQuantity ? quantity - maxPromotionQuantity : 0;
+        // 세트로 처리되는 전체 수량 (2+1이면 세트당 3개씩)
+        int promotionSetQuantity = possibleSets * (promotion.getBuyCount() + promotion.getGetCount());
+
+        // 요청 수량에서 세트로 처리되는 수량을 뺀 나머지가 일반 구매
+        int normalPurchaseQuantity = quantity - promotionSetQuantity;
+        
+        return normalPurchaseQuantity;
     }
 
     @Override
