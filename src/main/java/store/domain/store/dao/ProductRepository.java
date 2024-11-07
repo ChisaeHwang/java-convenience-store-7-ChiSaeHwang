@@ -40,10 +40,20 @@ public class ProductRepository {
      * @return 조건을 만족하는 상품
      */
     public Optional<Product> findByNameAndQuantityGreaterThanEqual(String name, int quantity) {
-        return products.stream()
+        // 같은 상품의 총 재고를 먼저 계산
+        int totalStock = products.stream()
                 .filter(product -> product.getName().equals(name))
-                .filter(product -> product.hasEnoughStock(quantity))
-                .findFirst();
+                .mapToInt(Product::getQuantity)
+                .sum();
+        
+        // 총 재고가 충분하면 상품 반환
+        if (totalStock >= quantity) {
+            return products.stream()
+                    .filter(product -> product.getName().equals(name))
+                    .findFirst();
+        }
+        
+        return Optional.empty();
     }
 
 

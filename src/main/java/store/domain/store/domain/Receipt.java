@@ -15,8 +15,7 @@ public final class Receipt {
     private final List<ReceiptItem> items;
     private final List<ReceiptItem> freeItems;
     private final Map<String, Promotion> promotionMap;
-    private final int normalPurchaseQuantity;
-    private final int normalPurchaseAmount;
+    private final Map<String, NormalPurchaseInfo> normalPurchaseMap;
     private final int totalAmount;
     private final int promotionDiscountAmount;
     private final int membershipDiscountAmount;
@@ -27,14 +26,12 @@ public final class Receipt {
             List<ReceiptItem> freeItems,
             boolean hasMembership,
             Map<String, Promotion> promotionMap,
-            int normalPurchaseQuantity,
-            int normalPurchaseAmount
+            Map<String, NormalPurchaseInfo> normalPurchaseMap
     ) {
         this.items = new ArrayList<>(items);
         this.freeItems = new ArrayList<>(freeItems);
         this.promotionMap = promotionMap;
-        this.normalPurchaseQuantity = normalPurchaseQuantity;
-        this.normalPurchaseAmount = normalPurchaseAmount;
+        this.normalPurchaseMap = normalPurchaseMap;
         this.totalAmount = calculateTotalAmount();
         this.promotionDiscountAmount = calculatePromotionDiscountAmount();
         this.membershipDiscountAmount = calculateMembershipDiscountAmount(hasMembership);
@@ -49,10 +46,9 @@ public final class Receipt {
             final List<ReceiptItem> freeItems,
             final boolean hasMembership,
             final Map<String, Promotion> promotionMap,
-            final int normalPurchaseQuantity,
-            final int normalPurchaseAmount
+            final Map<String, NormalPurchaseInfo> normalPurchaseMap
     ) {
-        return new Receipt(items, freeItems, hasMembership, promotionMap, normalPurchaseQuantity, normalPurchaseAmount);
+        return new Receipt(items, freeItems, hasMembership, promotionMap, normalPurchaseMap);
     }
 
     /**
@@ -96,12 +92,15 @@ public final class Receipt {
             return 0;
         }
 
-        // 프로모션 미적용 수량이 있을 때는 해당 금액에 대해서만 할인
-        if (normalPurchaseQuantity > 0) {
-            return (int) (normalPurchaseAmount * MEMBERSHIP_DISCOUNT_RATE);
+        // 프로모션 미적용 정보가 있을 때
+        if (!normalPurchaseMap.isEmpty()) {
+            int totalNormalAmount = normalPurchaseMap.values().stream()
+                    .mapToInt(info -> info.amount)
+                    .sum();
+            return (int) (totalNormalAmount * MEMBERSHIP_DISCOUNT_RATE);
         }
 
-        // 그 외의 경우 기존 로직 유지
+        // 프로모션 미적용 정보가 없을 때는 기존 로직 적용
         int discountableAmount = items.stream()
                 .filter(item -> !item.isPromotionItem())
                 .mapToInt(ReceiptItem::getAmount)
@@ -145,5 +144,9 @@ public final class Receipt {
 
     public int getFinalAmount() {
         return finalAmount;
+    }
+
+    // 프로모션 미적용 정보를 담는 클래스
+    public record NormalPurchaseInfo(int quantity, int amount) {
     }
 }

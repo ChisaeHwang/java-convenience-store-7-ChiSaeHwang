@@ -10,6 +10,7 @@ import store.domain.store.dao.PromotionRepository;
 import store.domain.store.domain.Product;
 import store.domain.store.domain.Promotion;
 import store.domain.store.domain.Receipt;
+import store.domain.store.domain.Receipt.NormalPurchaseInfo;
 import store.domain.store.domain.ReceiptItem;
 import store.domain.store.dto.request.PurchaseRequest;
 import store.domain.store.dto.response.ProductResponse;
@@ -39,26 +40,31 @@ public class StoreServiceImpl implements StoreService {
             throw new IllegalArgumentException(ERROR_NO_ITEMS);
         }
 
+        // 먼저 모든 요청에 대해 재고 확인
+        for (PurchaseRequest request : requests) {
+            validateTotalStock(request);
+        }
+
         ArrayList<ReceiptItem> items = new ArrayList<>();
         ArrayList<ReceiptItem> freeItems = new ArrayList<>();
         Map<String, Promotion> promotionMap = new HashMap<>();
+        Map<String, NormalPurchaseInfo> normalPurchaseMap = new HashMap<>();
 
-        // 프로모션 적용되지 않는 수량과 금액 계산
-        int normalQuantity = 0;
-        int normalAmount = 0;
-        
-        if (requests.size() == 1) {  // 단일 상품 구매일 때만
-            PurchaseRequest request = requests.get(0);
-            normalQuantity = getNormalPurchaseQuantity(request.getProductName(), request.getQuantity());
+        // 각 요청에 대해 프로모션 미적용 수량/금액 계산
+        for (PurchaseRequest request : requests) {
+            int normalQuantity = getNormalPurchaseQuantity(request.getProductName(), request.getQuantity());
             if (normalQuantity > 0) {
                 Product product = productRepository.findByNameAndQuantityGreaterThanEqual(
                         request.getProductName(), request.getQuantity())
                         .orElseThrow(() -> new IllegalArgumentException(ERROR_INSUFFICIENT_STOCK));
-                normalAmount = normalQuantity * product.getPrice();
+                int normalAmount = normalQuantity * product.getPrice();
+                
+                normalPurchaseMap.put(request.getProductName(), 
+                    new Receipt.NormalPurchaseInfo(normalQuantity, normalAmount));
             }
         }
 
-        // 각 요청 처리
+        // 상품 처리
         for (PurchaseRequest request : requests) {
             if (usePromotion) {
                 productRepository.findPromotionProduct(request.getProductName())
@@ -83,8 +89,7 @@ public class StoreServiceImpl implements StoreService {
                 freeItems, 
                 hasMembership, 
                 promotionMap, 
-                normalQuantity, 
-                normalAmount  
+                normalPurchaseMap
         ));
     }
 
@@ -178,7 +183,7 @@ public class StoreServiceImpl implements StoreService {
             Promotion promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName())
                     .orElseThrow(() -> new IllegalArgumentException(ERROR_INVALID_PROMOTION));
 
-            // usePromotion이 false여도 프로모션 재고 먼저 소진
+            // usePromotion이 false여도 프로모션 재고 먼저 ���진
             handlePromotionPurchase(request, promotionProduct.get(), promotion, items, freeItems);
             return;
         }
@@ -279,5 +284,28 @@ public class StoreServiceImpl implements StoreService {
         return productRepository.findPromotionProduct(productName)
                 .filter(Product::hasValidPromotion)
                 .isPresent();
+    }
+
+    private void validateTotalStock(PurchaseRequest request) {
+        Optional<Product> promotionProduct = productRepository.findPromotionProduct(request.getProductName())
+                .filter(Product::hasValidPromotion);
+        
+        int totalAvailableStock = 0;
+        
+        // 프로모션 재고 확인
+        if (promotionProduct.isPresent()) {
+            totalAvailableStock += promotionProduct.get().getQuantity();
+        }
+        
+        // 일반 재고 확인
+        Optional<Product> normalProduct = productRepository.findNormalProduct(request.getProductName());
+        if (normalProduct.isPresent()) {
+            totalAvailableStock += normalProduct.get().getQuantity();
+        }
+        
+        // 총 재고가 요청 수량보다 적으면 예외 발생
+        if (totalAvailableStock < request.getQuantity()) {
+            throw new IllegalArgumentException(ERROR_INSUFFICIENT_STOCK);
+        }
     }
 }
