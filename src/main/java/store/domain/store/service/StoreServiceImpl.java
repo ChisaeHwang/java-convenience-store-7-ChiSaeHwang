@@ -36,54 +36,96 @@ public class StoreServiceImpl implements StoreService {
 
     @Override
     public ReceiptResponse purchase(List<PurchaseRequest> requests, boolean usePromotion, boolean hasMembership) {
-        if (requests == null || requests.isEmpty()) {
-            throw new IllegalArgumentException(ERROR_NO_ITEMS);
-        }
-
-        // 먼저 모든 요청에 대해 재고 확인
-        for (PurchaseRequest request : requests) {
-            validateTotalStock(request);
-        }
+        validateRequests(requests);
+        validateStockForAllRequests(requests);
 
         ArrayList<ReceiptItem> items = new ArrayList<>();
         ArrayList<ReceiptItem> freeItems = new ArrayList<>();
+        Map<String, Promotion> promotionMap = createPromotionMap(requests, usePromotion);
+        Map<String, NormalPurchaseInfo> normalPurchaseMap = createNormalPurchaseMap(requests);
+
+        processAllRequests(requests, items, freeItems, usePromotion);
+        markPromotionItems(items, freeItems);
+
+        return createReceiptResponse(items, freeItems, hasMembership, promotionMap, normalPurchaseMap);
+    }
+
+    private void validateRequests(List<PurchaseRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new IllegalArgumentException(ERROR_NO_ITEMS);
+        }
+    }
+
+    private void validateStockForAllRequests(List<PurchaseRequest> requests) {
+        requests.forEach(this::validateTotalStock);
+    }
+
+    private Map<String, Promotion> createPromotionMap(List<PurchaseRequest> requests, boolean usePromotion) {
         Map<String, Promotion> promotionMap = new HashMap<>();
+        if (usePromotion) {
+            requests.forEach(request -> addToPromotionMap(request, promotionMap));
+        }
+        return promotionMap;
+    }
+
+    private void addToPromotionMap(PurchaseRequest request, Map<String, Promotion> promotionMap) {
+        productRepository.findPromotionProduct(request.getProductName())
+                .filter(Product::hasValidPromotion)
+                .ifPresent(product -> {
+                    promotionRepository.findByName(product.getPromotionName())
+                            .ifPresent(promotion -> promotionMap.put(request.getProductName(), promotion));
+                });
+    }
+
+    private Map<String, NormalPurchaseInfo> createNormalPurchaseMap(List<PurchaseRequest> requests) {
         Map<String, NormalPurchaseInfo> normalPurchaseMap = new HashMap<>();
+        requests.forEach(request -> addToNormalPurchaseMap(request, normalPurchaseMap));
+        return normalPurchaseMap;
+    }
 
-        // 각 요청에 대해 프로모션 미적용 수량/금액 계산
-        for (PurchaseRequest request : requests) {
-            int normalQuantity = getNormalPurchaseQuantity(request.getProductName(), request.getQuantity());
-            if (normalQuantity > 0) {
-                Product product = productRepository.findByNameAndQuantityGreaterThanEqual(
-                        request.getProductName(), request.getQuantity())
-                        .orElseThrow(() -> new IllegalArgumentException(ERROR_INSUFFICIENT_STOCK));
-                int normalAmount = normalQuantity * product.getPrice();
-                
-                normalPurchaseMap.put(request.getProductName(), 
-                    new Receipt.NormalPurchaseInfo(normalQuantity, normalAmount));
-            }
+    private void addToNormalPurchaseMap(PurchaseRequest request, Map<String, NormalPurchaseInfo> normalPurchaseMap) {
+        int normalQuantity = getNormalPurchaseQuantity(request.getProductName(), request.getQuantity());
+        if (normalQuantity > 0) {
+            Product product = findProductForNormalPurchase(request);
+            int normalAmount = normalQuantity * product.getPrice();
+            normalPurchaseMap.put(request.getProductName(), 
+                new Receipt.NormalPurchaseInfo(normalQuantity, normalAmount));
         }
+    }
 
-        // 상품 처리
-        for (PurchaseRequest request : requests) {
-            if (usePromotion) {
-                productRepository.findPromotionProduct(request.getProductName())
-                        .filter(Product::hasValidPromotion)
-                        .ifPresent(product -> {
-                            promotionRepository.findByName(product.getPromotionName())
-                                    .ifPresent(promotion -> promotionMap.put(request.getProductName(), promotion));
-                        });
-            }
-            
-            processRequest(request, items, freeItems, usePromotion);
-        }
+    private Product findProductForNormalPurchase(PurchaseRequest request) {
+        return productRepository.findByNameAndQuantityGreaterThanEqual(
+                request.getProductName(), request.getQuantity())
+                .orElseThrow(() -> new IllegalArgumentException(ERROR_INSUFFICIENT_STOCK));
+    }
 
-        // 프로모션을 실제로 사용한 상품만 표시
+    private void processAllRequests(
+            List<PurchaseRequest> requests,
+            List<ReceiptItem> items,
+            List<ReceiptItem> freeItems,
+            boolean usePromotion
+    ) {
+        requests.forEach(request -> processRequest(request, items, freeItems, usePromotion));
+    }
+
+    private void markPromotionItems(List<ReceiptItem> items, List<ReceiptItem> freeItems) {
         items.stream()
-                .filter(item -> freeItems.stream()
-                        .anyMatch(free -> free.getName().equals(item.getName())))
+                .filter(item -> hasMatchingFreeItem(item, freeItems))
                 .forEach(ReceiptItem::markAsPromotionItem);
+    }
 
+    private boolean hasMatchingFreeItem(ReceiptItem item, List<ReceiptItem> freeItems) {
+        return freeItems.stream()
+                .anyMatch(free -> free.getName().equals(item.getName()));
+    }
+
+    private ReceiptResponse createReceiptResponse(
+            List<ReceiptItem> items,
+            List<ReceiptItem> freeItems,
+            boolean hasMembership,
+            Map<String, Promotion> promotionMap,
+            Map<String, NormalPurchaseInfo> normalPurchaseMap
+    ) {
         return ReceiptResponse.from(Receipt.of(
                 items, 
                 freeItems, 
@@ -103,60 +145,64 @@ public class StoreServiceImpl implements StoreService {
 
     @Override
     public boolean canAddPromotionPurchase(String productName, int quantity) {
-        Optional<Product> promotionProduct = productRepository.findPromotionProduct(productName)
-                .filter(Product::hasValidPromotion);
-
-        if (promotionProduct.isEmpty()) {
+        Optional<Promotion> promotion = findValidPromotion(productName);
+        if (promotion.isEmpty()) {
             return false;
         }
-
-        Optional<Promotion> promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName());
         
-        // 프로모션이 없거나 유효하지 않은 경우 false 반환
-        if (promotion.isEmpty() || !promotion.get().isValid()) {  // 여기서 간 체크
+        if (!isValidPromotionQuantity(quantity, promotion.get())) {
             return false;
         }
-
-        // 구매 수량이 프로모션 구매 수량의 배수인지 확인
-        if (quantity % promotion.get().getBuyCount() != 0) {
-            return false;
-        }
-
-        // 증정품을 포함한 전체 필요 수량 계산
-        int sets = quantity / promotion.get().getBuyCount();
-        int totalQuantityNeeded = quantity + (sets * promotion.get().getGetCount());
         
-        int promotionStock = promotionProduct.get().getQuantity();
-        return promotionStock >= totalQuantityNeeded;
+        return hasEnoughPromotionStock(productName, quantity, promotion.get());
+    }
+
+    private Optional<Promotion> findValidPromotion(String productName) {
+        return productRepository.findPromotionProduct(productName)
+                .filter(Product::hasValidPromotion)
+                .flatMap(product -> promotionRepository.findByName(product.getPromotionName()))
+                .filter(Promotion::isValid);
+    }
+
+    private boolean isValidPromotionQuantity(int quantity, Promotion promotion) {
+        return quantity % promotion.getBuyCount() == 0;
+    }
+
+    private boolean hasEnoughPromotionStock(String productName, int quantity, Promotion promotion) {
+        int sets = quantity / promotion.getBuyCount();
+        int totalNeeded = quantity + (sets * promotion.getGetCount());
+        return getPromotionStock(productName) >= totalNeeded;
+    }
+
+    private int getPromotionStock(String productName) {
+        return productRepository.findPromotionProduct(productName)
+                .map(Product::getQuantity)
+                .orElse(0);
     }
 
     @Override
     public int getNormalPurchaseQuantity(String productName, int quantity) {
-        Optional<Product> promotionProduct = productRepository.findPromotionProduct(productName)
-                .filter(Product::hasValidPromotion);
-
-        if (promotionProduct.isEmpty()) {
+        Optional<Promotion> promotion = findValidPromotion(productName);
+        if (promotion.isEmpty()) {
             return 0;
         }
-
-        Promotion promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName())
-                .orElse(null);
-        if (promotion == null) {
-            return 0;
-        }
-
-        int promotionStock = promotionProduct.get().getQuantity();
-
-        // 가능한 세트 수 계산
-        int possibleSets = promotionStock / (promotion.getBuyCount() + promotion.getGetCount());
-
-        // 세트로 처리되는 전체 수량 (2+1이면 세트당 3개씩)
-        int promotionSetQuantity = possibleSets * (promotion.getBuyCount() + promotion.getGetCount());
-
-        // 요청 수량에서 세트로 처리되는 수량을 뺀 나머지가 일반 구매
-        int normalPurchaseQuantity = quantity - promotionSetQuantity;
         
-        return normalPurchaseQuantity;
+        return calculateNormalPurchaseQuantity(productName, quantity, promotion.get());
+    }
+
+    private int calculateNormalPurchaseQuantity(String productName, int quantity, Promotion promotion) {
+        int promotionStock = getPromotionStock(productName);
+        int possibleSets = calculatePossibleSets(promotionStock, promotion);
+        int promotionSetQuantity = calculatePromotionSetQuantity(possibleSets, promotion);
+        return quantity - promotionSetQuantity;
+    }
+
+    private int calculatePossibleSets(int stock, Promotion promotion) {
+        return stock / (promotion.getBuyCount() + promotion.getGetCount());
+    }
+
+    private int calculatePromotionSetQuantity(int sets, Promotion promotion) {
+        return sets * (promotion.getBuyCount() + promotion.getGetCount());
     }
 
     @Override
@@ -183,7 +229,7 @@ public class StoreServiceImpl implements StoreService {
             Promotion promotion = promotionRepository.findByName(promotionProduct.get().getPromotionName())
                     .orElseThrow(() -> new IllegalArgumentException(ERROR_INVALID_PROMOTION));
 
-            // usePromotion이 false여도 프로모션 재고 먼저 ���진
+            // usePromotion이 false여도 프로모션 재고 먼저 진
             handlePromotionPurchase(request, promotionProduct.get(), promotion, items, freeItems);
             return;
         }
@@ -226,6 +272,7 @@ public class StoreServiceImpl implements StoreService {
             );
         }
     }
+
     private void processPromotionPurchase(
             PurchaseRequest request,
             Product promotionProduct,
@@ -233,34 +280,50 @@ public class StoreServiceImpl implements StoreService {
             List<ReceiptItem> items,
             List<ReceiptItem> freeItems
     ) {
-        // 프로모션이 유효하지 않으면 일반 구매로 처리
         if (!promotion.isValid()) {
             processNormalPurchase(request, items);
             return;
         }
+        
+        addPromotionPurchaseItems(request, promotionProduct, promotion, items, freeItems);
+        updatePromotionStock(promotionProduct, request.getQuantity());
+    }
 
-        int quantity = Math.min(request.getQuantity(), promotionProduct.getQuantity());
+    private void addPromotionPurchaseItems(
+            PurchaseRequest request,
+            Product product,
+            Promotion promotion,
+            List<ReceiptItem> items,
+            List<ReceiptItem> freeItems
+    ) {
+        int quantity = Math.min(request.getQuantity(), product.getQuantity());
+        items.add(createPurchaseItem(request.getProductName(), quantity, product.getPrice()));
+        addFreeItemsIfApplicable(request.getProductName(), quantity, promotion, freeItems);
+    }
 
-        // 입력한 수량 그대로 items에 추가
-        items.add(ReceiptItem.of(
-                request.getProductName(),
-                quantity,
-                promotionProduct.getPrice()
-        ));
+    private ReceiptItem createPurchaseItem(String name, int quantity, int price) {
+        return ReceiptItem.of(name, quantity, price);
+    }
 
-        // 프로모션 세트 계산 (증정품만을 위해)
-        int fullSetCount = quantity / (promotion.getBuyCount() + promotion.getGetCount());
-        int freeQuantity = fullSetCount * promotion.getGetCount();
-
-        // 증정 상품 추가 (프로모션이 유효한 경우에만)
+    private void addFreeItemsIfApplicable(
+            String productName,
+            int quantity,
+            Promotion promotion,
+            List<ReceiptItem> freeItems
+    ) {
+        int freeQuantity = calculateFreeQuantity(quantity, promotion);
         if (freeQuantity > 0) {
-            freeItems.add(ReceiptItem.createFreeItem(
-                    request.getProductName(),
-                    freeQuantity
-            ));
+            freeItems.add(ReceiptItem.createFreeItem(productName, freeQuantity));
         }
+    }
 
-        productRepository.save(promotionProduct.removeStock(quantity));
+    private int calculateFreeQuantity(int quantity, Promotion promotion) {
+        int fullSetCount = quantity / (promotion.getBuyCount() + promotion.getGetCount());
+        return fullSetCount * promotion.getGetCount();
+    }
+
+    private void updatePromotionStock(Product product, int quantity) {
+        productRepository.save(product.removeStock(quantity));
     }
 
     private void processNormalPurchase(
