@@ -141,26 +141,43 @@ public class StoreServiceImpl implements StoreService {
         List<Product> products = productRepository.findAll();
         List<ProductResponse> responses = new ArrayList<>();
         
-        // 프로모션 상품 처리
+        // 모든 상품명에 대해 처리
         products.stream()
-                .filter(Product::hasValidPromotion)
-                .forEach(product -> {
-                    responses.add(ProductResponse.from(product));  // 재고 있는 버전
+                .map(Product::getName)
+                .distinct()
+                .forEach(productName -> {
+                    // 프로모션 상품 처리
+                    Optional<Product> promotionProduct = products.stream()
+                            .filter(p -> p.getName().equals(productName))
+                            .filter(Product::hasValidPromotion)
+                            .findFirst();
                     
-                    // 같은 상품의 재고 없는 일반 버전 추가
-                    Product outOfStockProduct = Product.of(
-                        product.getName(),
-                        product.getPrice(),
-                        0,
-                        null
-                    );
-                    responses.add(ProductResponse.createOutOfStock(outOfStockProduct));
+                    // 일반 상품 찾기
+                    Optional<Product> normalProduct = products.stream()
+                            .filter(p -> p.getName().equals(productName))
+                            .filter(p -> !p.hasValidPromotion())
+                            .findFirst();
+                    
+                    if (promotionProduct.isPresent()) {
+                        // 프로모션 상품 추가
+                        responses.add(ProductResponse.from(promotionProduct.get()));
+                        
+                        // 일반 상품이 없거나 재고가 0인 경우에만 재고 없음 버전 추가
+                        if (normalProduct.isEmpty() || normalProduct.get().getQuantity() == 0) {
+                            Product outOfStockProduct = Product.of(
+                                productName,
+                                promotionProduct.get().getPrice(),
+                                0,
+                                null
+                            );
+                            responses.add(ProductResponse.createOutOfStock(outOfStockProduct));
+                        }
+                    }
+                    
+                    // 일반 상품이 있으면 추가
+                    normalProduct.ifPresent(product -> 
+                        responses.add(ProductResponse.from(product)));
                 });
-        
-        // 일반 상품 처리
-        products.stream()
-                .filter(product -> !product.hasValidPromotion())
-                .forEach(product -> responses.add(ProductResponse.from(product)));
         
         return responses;
     }
