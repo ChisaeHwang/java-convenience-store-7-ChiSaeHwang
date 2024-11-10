@@ -41,7 +41,10 @@ public class StoreConsole {
 
     public void run() {
         try {
-            processPurchase();
+            do {
+                processPurchase();
+                CommandWriter.write(CONTINUE_SHOPPING_MESSAGE);
+            } while (readYesNo());
         } catch (IllegalArgumentException e) {
             CommandWriter.write(e.getMessage());
         }
