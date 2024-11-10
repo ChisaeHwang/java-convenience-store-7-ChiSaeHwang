@@ -21,7 +21,7 @@ public class StoreConsole {
     private static final String PURCHASE_INPUT_MESSAGE =
             "\n구매하실 상품명과 수량을 입력해 주세요. (예: [사이다-2],[감자칩-1])";
     private static final String PROMOTION_CONFIRM_MESSAGE =
-            "\n현재 %s은(는) %d개를 무료로 더 받을 수 있습니다. 추가하시겠습니까? (Y/N)";
+            "\n현재 %s은(는) %d개를 무료로  받을 수 있습니다. 추가하시겠습니까? (Y/N)";
     private static final String NORMAL_PURCHASE_CONFIRM_MESSAGE =
             "\n현재 %s %d개는 프로모션 할인이 적용되지 않습니다. 그래도 구매하시겠습니까? (Y/N)";
     private static final String MEMBERSHIP_CONFIRM_MESSAGE = "\n멤버십 할인을 받으시겠습니까? (Y/N)";
@@ -35,19 +35,13 @@ public class StoreConsole {
     private static final String RECEIPT_TOTAL_FORMAT = "총구매액\t\t%d\t%,d";
     private static final String RECEIPT_DISCOUNT_FORMAT = "%s\t\t\t-%,d";
     private static final String RECEIPT_FINAL_FORMAT = "내실돈\t\t\t %,d";
-    private static final String CONTINUE_SHOPPING_MESSAGE = "\n감사합니다. 구매하고 싶은 다른 상품이 있나요? (Y/N)";
+    private static final String CONTINUE_SHOPPING_MESSAGE = "\n감사합니다. 구매하고 싶은 다른 상품  있나요? (Y/N)";
 
     private final StoreController controller = StoreController.getInstance(StoreService.getInstance());
 
     public void run() {
         try {
-            boolean continueShopping = true;
-            while (continueShopping) {
-                processPurchase();
-                CommandWriter.write(CONTINUE_SHOPPING_MESSAGE);
-                continueShopping = readYesNo();
-                CommandWriter.write("");
-            }
+            processPurchase();
         } catch (IllegalArgumentException e) {
             CommandWriter.write(e.getMessage());
         }
@@ -70,16 +64,18 @@ public class StoreConsole {
         CommandWriter.write("");
         List<ProductResponse> products = controller.getProducts();
 
-        products.forEach(product -> {
-            String quantity = product.getQuantity() > 0 ? product.getQuantity() + "개" : "재고 없음";
-            String promotionMark = product.hasPromotion() ? " " + product.getPromotionName() : "";
+        for (ProductResponse product : products) {
+            String promotionMark = "";
+            if (product.hasPromotion()) {
+                promotionMark = " " + product.getPromotionName();
+            }
 
             CommandWriter.writeFormat(PRODUCT_FORMAT,
                     product.getName(),
                     product.getPrice(),
-                    quantity,
+                    product.getQuantity(),
                     promotionMark);
-        });
+        }
     }
 
     private List<PurchaseRequest> inputPurchaseRequests() {

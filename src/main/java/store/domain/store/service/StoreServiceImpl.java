@@ -137,10 +137,31 @@ public class StoreServiceImpl implements StoreService {
 
     @Override
     public List<ProductResponse> getProducts() {
-        return productRepository.findAll()
-                .stream()
-                .map(ProductResponse::from)
-                .toList();
+        List<Product> products = productRepository.findAll();
+        List<ProductResponse> responses = new ArrayList<>();
+        
+        // 프로모션 상품 처리
+        products.stream()
+                .filter(Product::hasValidPromotion)
+                .forEach(product -> {
+                    responses.add(ProductResponse.from(product));  // 재고 있는 버전
+                    
+                    // 같은 상품의 재고 없는 일반 버전 추가
+                    Product outOfStockProduct = Product.of(
+                        product.getName(),
+                        product.getPrice(),
+                        0,
+                        null
+                    );
+                    responses.add(ProductResponse.createOutOfStock(outOfStockProduct));
+                });
+        
+        // 일반 상품 처리
+        products.stream()
+                .filter(product -> !product.hasValidPromotion())
+                .forEach(product -> responses.add(ProductResponse.from(product)));
+        
+        return responses;
     }
 
     @Override
