@@ -1,5 +1,6 @@
 package store.domain.store.service;
 
+import camp.nextstep.edu.missionutils.DateTimes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -167,7 +168,9 @@ public class StoreServiceImpl implements StoreService {
     @Override
     public boolean canAddPromotionPurchase(String productName, int quantity) {
         Optional<Promotion> promotion = findValidPromotion(productName);
-        if (promotion.isEmpty()) {
+        
+        // 프로모션이 없거나 유효하지 않은 경우
+        if (promotion.isEmpty() || !promotion.get().isValid(DateTimes.now())) {
             return false;
         }
         
@@ -332,15 +335,16 @@ public class StoreServiceImpl implements StoreService {
             Promotion promotion,
             List<ReceiptItem> freeItems
     ) {
-        int freeQuantity = calculateFreeQuantity(quantity, promotion);
+        int freeQuantity = calculateFreeQuantity(productName, quantity);
         if (freeQuantity > 0) {
             freeItems.add(ReceiptItem.createFreeItem(productName, freeQuantity));
         }
     }
 
-    private int calculateFreeQuantity(int quantity, Promotion promotion) {
-        int fullSetCount = quantity / (promotion.getBuyCount() + promotion.getGetCount());
-        return fullSetCount * promotion.getGetCount();
+    private int calculateFreeQuantity(String productName, int quantity) {
+        return findValidPromotion(productName)
+                .map(promotion -> promotion.calculateFreeQuantity(quantity, DateTimes.now()))
+                .orElse(0);
     }
 
     private void updatePromotionStock(Product product, int quantity) {

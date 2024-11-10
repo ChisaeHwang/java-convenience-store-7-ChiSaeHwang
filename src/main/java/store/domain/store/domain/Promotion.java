@@ -1,6 +1,8 @@
 package store.domain.store.domain;
 
+import camp.nextstep.edu.missionutils.DateTimes;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * 상품에 적용되는 프로모션을 표현하는 클래스.
@@ -55,17 +57,30 @@ public final class Promotion {
      * @return 프로모션 유효 여부
      */
     public boolean isValid() {
-        LocalDate now = LocalDate.now();
-        return !now.isBefore(startDate) && !now.isAfter(endDate);
+        return isValid(DateTimes.now());
+    }
+
+    /**
+     * 프로모션이 주어진 시간에 유효한지 확인한다.
+     *
+     * @param dateTime 확인할 시간
+     * @return 프로모션 유효 여부
+     */
+    public boolean isValid(LocalDateTime dateTime) {
+        LocalDate date = dateTime.toLocalDate();
+        return date.isEqual(startDate) || 
+               date.isEqual(endDate) || 
+               (date.isAfter(startDate) && date.isBefore(endDate));
     }
 
     /**
      * 주어진 구매 수량에 대해 무료로 제공되는 수량을 계산한다.
      *
      * @param quantity 구매 수량
+     * @param now
      * @return 무료 제공 수량
      */
-    public int calculateFreeQuantity(int quantity) {
+    public int calculateFreeQuantity(int quantity, LocalDateTime now) {
         if (!isValid()) {
             return 0;
         }
